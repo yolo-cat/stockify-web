@@ -466,12 +466,12 @@ export function usePortfolioData() {
     () =>
       buildAssetOverviewUiState({
         taiwanStockValue: holdingsUiState.taiwanMarketValue,
-        usStockValue: holdingsUiState.usMarketValue,
+        usStockValue: holdingsUiState.usMarketValue * effectiveUsdToTwdRate,
         stockValues: holdingsUiState.assetStockValues,
         bankDeposits: assetBalances.bankDeposits,
         loans: assetBalances.loans,
       }),
-    [holdingsUiState, assetBalances],
+    [holdingsUiState, effectiveUsdToTwdRate, assetBalances],
   );
 
   const transactionsWithStock = useMemo<TransactionWithStock[]>(
