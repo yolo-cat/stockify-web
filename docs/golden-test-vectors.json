@@ -1,0 +1,3036 @@
+{
+  "generated_at": "2026-11-24T05:46:18.912102+00:00",
+  "source_repo": "/Users/joseph-m2/.gemini/antigravity/worktrees/Stockify/refactor_stockify_web",
+  "web_v1_scope": {
+    "included": [
+      "TW/US holdings & accounts",
+      "TW/US/Combined home display modes",
+      "USD/TWD exchange rate",
+      "Margin trading & short selling",
+      "Moving-average realized/unrealized split toggle",
+      "Dividend-excluded P&L toggle",
+      "2.11% TW supplementary NHI fee (> 20,000 TWD)",
+      "Calculation rounding modes (round vs floor)",
+      "XIRR",
+      "1M/6M/1Y history chart replay",
+      "Performance calendar derived from PersonalHistoryPoint",
+      "Asset overview (bank deposits & loans, pie chart)",
+      "Dividend info",
+      "CSV import/export (UTF-8 strict -> Big5 -> UTF-16 BOM)",
+      "Asset Balance JSON (stockify.asset-balances v1) import/export"
+    ],
+    "replaced_or_excluded": [
+      "Room SQLite -> Lovable Cloud (Supabase PostgreSQL + RLS)",
+      "Google Drive backup/restore -> Supabase Cloud sync + Google OAuth",
+      "Direct OkHttp/Ktor scraping -> Supabase Deno Edge Functions",
+      "App Lock PIN -> Excluded in Web v1",
+      "PDF holding import -> Excluded in Web v1"
+    ]
+  },
+  "total_vectors": 78,
+  "counts_by_group": {
+    "database_entities_and_settings": 10,
+    "core_holdings_and_pl_engine": 12,
+    "margin_and_short_selling": 12,
+    "history_chart_and_calendar": 10,
+    "market_data_and_edge_apis": 12,
+    "import_export_and_backup": 12,
+    "ui_screens_viewmodels_and_navigation": 10
+  },
+  "vectors": [
+    {
+      "id": "account_restore_trim_and_fee_override_01",
+      "group": "database_entities_and_settings",
+      "module": "AccountRestoreSupport & AccountFeeDiscountSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/AccountRestoreSupportTest.kt:17-77",
+      "description": "Validates restored accounts trim names, preserve IDs, apply null fee overrides to shared defaults, and apply explicit per-account fee overrides.",
+      "inputs": {
+        "trimInput": [
+          {
+            "id": 1,
+            "name": " 退休帳戶 "
+          }
+        ],
+        "shared": {
+          "feeDiscount": 0.28,
+          "minFeeRegular": 1,
+          "minFeeOddLot": 1
+        },
+        "overrideAccount": {
+          "id": 2,
+          "name": "長期投資",
+          "feeDiscount": 0.18,
+          "minFeeRegular": 2,
+          "minFeeOddLot": 3
+        }
+      },
+      "expected": {
+        "trimmedAccounts": [
+          {
+            "id": 1,
+            "name": "退休帳戶",
+            "feeDiscount": null
+          }
+        ],
+        "legacyEffective": {
+          "feeDiscount": 0.28,
+          "minFeeRegular": 1,
+          "minFeeOddLot": 1
+        },
+        "overrideEffectiveAccount2": {
+          "feeDiscount": 0.18,
+          "minFeeRegular": 2,
+          "minFeeOddLot": 3
+        },
+        "fallbackAccount1": {
+          "feeDiscount": 0.28,
+          "minFeeRegular": 1,
+          "minFeeOddLot": 1
+        }
+      }
+    },
+    {
+      "id": "account_restore_validation_rejections_02",
+      "group": "database_entities_and_settings",
+      "module": "AccountRestoreSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/AccountRestoreSupportTest.kt:25-36,79-90",
+      "description": "Rejects restored account lists with id <= 0, blank name, duplicate IDs, negative/NaN feeDiscount, or negative minFeeRegular.",
+      "inputs": {
+        "invalidCases": [
+          [
+            {
+              "id": 0,
+              "name": "帳戶"
+            }
+          ],
+          [
+            {
+              "id": 1,
+              "name": " "
+            }
+          ],
+          [
+            {
+              "id": 1,
+              "name": "A"
+            },
+            {
+              "id": 1,
+              "name": "B"
+            }
+          ],
+          [
+            {
+              "id": 1,
+              "name": "帳戶",
+              "feeDiscount": -0.1
+            }
+          ],
+          [
+            {
+              "id": 1,
+              "name": "帳戶",
+              "feeDiscount": "NaN"
+            }
+          ],
+          [
+            {
+              "id": 1,
+              "name": "帳戶",
+              "minFeeRegular": -1
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "allThrowIllegalArgumentException": true,
+        "rejectedCount": 6
+      }
+    },
+    {
+      "id": "account_restore_active_id_resolution_03",
+      "group": "database_entities_and_settings",
+      "module": "AccountRestoreSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/AccountRestoreSupportTest.kt:38-44",
+      "description": "Resolves activeAccountId after account restore, keeping existing IDs or 0 and resetting deleted IDs to 0.",
+      "inputs": {
+        "restoredAccounts": [
+          {
+            "id": 1,
+            "name": "預設帳戶"
+          }
+        ],
+        "candidateActiveIds": [
+          1,
+          2,
+          0
+        ]
+      },
+      "expected": {
+        "forId1": 1,
+        "forId2": 0,
+        "forId0": 0
+      }
+    },
+    {
+      "id": "account_backup_json_legacy_and_override_04",
+      "group": "database_entities_and_settings",
+      "module": "Account",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/AccountRestoreSupportTest.kt:92-115",
+      "description": "Serializes Account with fee overrides and deserializes legacy JSON lacking feeDiscount/minFee fields as null.",
+      "inputs": {
+        "currentAccount": {
+          "id": 2,
+          "name": "長期投資",
+          "feeDiscount": 0.18,
+          "minFeeRegular": 2,
+          "minFeeOddLot": 3
+        },
+        "legacyJson": "[{\"id\":1,\"name\":\"預設帳戶\"}]"
+      },
+      "expected": {
+        "containsFeeDiscountKey": true,
+        "current": {
+          "feeDiscount": 0.18,
+          "minFeeRegular": 2,
+          "minFeeOddLot": 3
+        },
+        "legacyFeeDiscount": null
+      }
+    },
+    {
+      "id": "transaction_list_repository_account_switching_05",
+      "group": "database_entities_and_settings",
+      "module": "TransactionListRepository",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionListRepositoryTest.kt:23-56",
+      "description": "TransactionListRepository scopes queries by activeAccountId (specific account vs 0 for all accounts) and sets isLoaded=true after emission.",
+      "inputs": {
+        "allTransactions": [
+          {
+            "id": 1,
+            "stockCode": "2330",
+            "accountId": 1
+          },
+          {
+            "id": 2,
+            "stockCode": "2330",
+            "accountId": 2
+          }
+        ],
+        "activeAccountSequence": [
+          2,
+          0
+        ]
+      },
+      "expected": {
+        "initialIsLoaded": false,
+        "selectedSnapshot": {
+          "isLoaded": true,
+          "accountId": 2,
+          "transactionIds": [
+            2
+          ],
+          "queriedAccountIds": [
+            2
+          ]
+        },
+        "allSnapshot": {
+          "isLoaded": true,
+          "accountId": 0,
+          "transactionIds": [
+            1,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "id": "transaction_list_repository_empty_and_mutations_06",
+      "group": "database_entities_and_settings",
+      "module": "TransactionListRepository",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionListRepositoryTest.kt:58-78",
+      "description": "TransactionListRepository treats empty Room results as loaded and propagates subsequent inserts and deletions.",
+      "inputs": {
+        "emissions": [
+          [],
+          [
+            {
+              "id": 1,
+              "stockCode": "2330",
+              "date": 0,
+              "recordTime": 1,
+              "type": "買進"
+            }
+          ],
+          []
+        ]
+      },
+      "expected": {
+        "initialEmpty": {
+          "isLoaded": true,
+          "count": 0
+        },
+        "afterInsert": {
+          "count": 1
+        },
+        "afterDelete": {
+          "isLoaded": true,
+          "count": 0
+        }
+      }
+    },
+    {
+      "id": "ordered_transactions_flow_stability_and_price_reuse_07",
+      "group": "database_entities_and_settings",
+      "module": "OrderedTransactionsFlowSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/OrderedTransactionsFlowTest.kt:15-38",
+      "description": "orderedTransactionsByStock groups by market:code, sorts stably by (date, recordTime, id) ASC, reuses the exact map reference on price-only updates, and rebuilds on transaction updates.",
+      "inputs": {
+        "initialTransactions": [
+          {
+            "id": 3,
+            "code": "ABC",
+            "market": "TW",
+            "date": 1,
+            "recordTime": 2
+          },
+          {
+            "id": 2,
+            "code": "ABC",
+            "market": "TW",
+            "date": 1,
+            "recordTime": 1
+          },
+          {
+            "id": 1,
+            "code": "ABC",
+            "market": "TW",
+            "date": 1,
+            "recordTime": 1
+          },
+          {
+            "id": 4,
+            "code": "ABC",
+            "market": "US",
+            "date": 1,
+            "recordTime": 1
+          }
+        ],
+        "priceUpdate": 120.0,
+        "updatedTransactions": [
+          {
+            "id": 7,
+            "code": "ABC",
+            "market": "TW",
+            "date": 1,
+            "recordTime": 0
+          }
+        ]
+      },
+      "expected": {
+        "initial": {
+          "TW:ABC": [
+            1,
+            2,
+            3
+          ],
+          "US:ABC": [
+            4
+          ]
+        },
+        "priceChangeReusesSameMapInstance": true,
+        "updated": {
+          "TW:ABC": [
+            7
+          ],
+          "hasUsAbc": false
+        }
+      }
+    },
+    {
+      "id": "stock_market_boundary_code_inference_and_lot_isolation_08",
+      "group": "database_entities_and_settings",
+      "module": "StockKey & StockMarket",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/StockMarketBoundaryTest.kt:12-60",
+      "description": "Enforces TW/US market boundaries for cache keys, ticker inference (mixed alphanumeric stays TW), and margin repayment lot matching across markets.",
+      "inputs": {
+        "cacheKeyInputs": [
+          {
+            "market": "TW",
+            "code": "abc"
+          },
+          {
+            "market": "US",
+            "code": "abc"
+          }
+        ],
+        "inferCodes": [
+          "00981A",
+          "AB12",
+          "AAPL",
+          "BRK.B"
+        ],
+        "marginTransactions": [
+          {
+            "stockCode": "ABC",
+            "market": "TW",
+            "type": "融資買進",
+            "marginPrincipal": 100.0,
+            "marginLotId": "same-lot"
+          },
+          {
+            "stockCode": "ABC",
+            "market": "US",
+            "type": "融資還款",
+            "marginRepayment": 100.0,
+            "marginRepaymentLotId": "same-lot"
+          }
+        ]
+      },
+      "expected": {
+        "cacheKeys": [
+          "TW:ABC",
+          "US:ABC"
+        ],
+        "inferredMarkets": {
+          "00981A": "TW",
+          "AB12": "TW",
+          "AAPL": "US",
+          "BRK.B": "US"
+        },
+        "crossMarketRepaymentValid": false,
+        "sameMarketRepaymentValid": true
+      }
+    },
+    {
+      "id": "settings_datastore_malformed_json_and_defaults_09",
+      "group": "database_entities_and_settings",
+      "module": "SettingsDataStore",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/SettingsDataStoreCacheRecoveryTest.kt:26-102",
+      "description": "SettingsDataStore recovers safely from malformed JSON caches, defaults P&L toggles to false, starts update highlights version as null, and persists auto backup error/attempt timestamps.",
+      "inputs": {
+        "malformedRealtimeJson": "{not-json",
+        "malformedIndexJson": "[not-json",
+        "setPartialSales": true,
+        "setExcludeDividends": true,
+        "dismissedVersion": "1.6.8",
+        "backupError": "連線逾時",
+        "backupAttemptTime": 1700000000000
+      },
+      "expected": {
+        "realtimeCache": {},
+        "taiwanIndexCache": null,
+        "partialSalesDefault": false,
+        "partialSalesAfterSet": true,
+        "excludeDividendsDefault": false,
+        "excludeDividendsAfterSet": true,
+        "updateHighlightsInitial": null,
+        "updateHighlightsAfterSet": "1.6.8",
+        "autoBackupLastError": "連線逾時",
+        "autoBackupLastAttemptAt": 1700000000000
+      }
+    },
+    {
+      "id": "text_size_mode_normalize_and_scale_10",
+      "group": "database_entities_and_settings",
+      "module": "TextSizeMode",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TextSizeModeTest.kt:9-22",
+      "description": "TextSizeMode.normalize falls back to DEFAULT for null/empty/unknown values, and scale maps modes to exact float density multipliers.",
+      "inputs": {
+        "normalizeInputs": [
+          null,
+          "",
+          "unknown"
+        ],
+        "scaleModes": [
+          "SMALL",
+          "DEFAULT",
+          "LARGE",
+          "EXTRA_LARGE"
+        ]
+      },
+      "expected": {
+        "normalized": {
+          "null": "DEFAULT",
+          "empty": "DEFAULT",
+          "unknown": "DEFAULT"
+        },
+        "scales": {
+          "SMALL": 0.9,
+          "DEFAULT": 1.0,
+          "LARGE": 1.15,
+          "EXTRA_LARGE": 1.3
+        }
+      }
+    },
+    {
+      "id": "holding_replay_ordinary_trades_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "HoldingCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/HoldingCalculationSupportTest.kt:279-321",
+      "description": "Ordinary buy, partial sell, and dividend replay totals at valuationDate = 3L",
+      "inputs": {
+        "valuationDate": 3,
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 1,
+            "recordTime": 1,
+            "type": "買進",
+            "buyPrice": 100.0,
+            "buyShares": 1000.0,
+            "expense": 100100.0
+          },
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 2,
+            "recordTime": 2,
+            "type": "賣出",
+            "sellPrice": 120.0,
+            "sellShares": 400.0,
+            "income": 47700.0
+          },
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 3,
+            "recordTime": 3,
+            "type": "配息",
+            "dividendIncome": 1000.0
+          }
+        ]
+      },
+      "expected": {
+        "shares": 600.0,
+        "totalBuyExpense": 100100.0,
+        "totalSellIncome": 47700.0,
+        "sellAmountBeforeFee": 48000.0,
+        "totalDividendIncome": 1000.0
+      }
+    },
+    {
+      "id": "holding_validate_oversell_rejected_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "HoldingCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/HoldingCalculationSupportTest.kt:324-345",
+      "description": "validateLongPositionBalances rejects selling more shares than held at transaction time",
+      "inputs": {
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 1,
+            "recordTime": 1,
+            "type": "買進",
+            "buyShares": 100.0
+          },
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 2,
+            "recordTime": 2,
+            "type": "賣出",
+            "sellShares": 101.0
+          }
+        ]
+      },
+      "expected": {
+        "validationErrorNonNull": true
+      }
+    },
+    {
+      "id": "holding_validate_company_action_mismatch_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "HoldingCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/HoldingCalculationSupportTest.kt:423-444",
+      "description": "validateLongPositionBalances rejects capital reduction when sharesAfterReduction mismatches capitalReductionRatio",
+      "inputs": {
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 1,
+            "recordTime": 1,
+            "type": "買進",
+            "buyShares": 100.0
+          },
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 2,
+            "recordTime": 2,
+            "type": "減資",
+            "capitalReductionRatio": 20.0,
+            "sharesBeforeReduction": 100.0,
+            "sharesAfterReduction": 70.0
+          }
+        ]
+      },
+      "expected": {
+        "validationErrorNonNull": true
+      }
+    },
+    {
+      "id": "holding_position_investment_basis_financed_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "HoldingCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/HoldingCalculationSupportTest.kt:155-169",
+      "description": "Financed open position uses remaining cash investment rather than full cost basis",
+      "inputs": {
+        "shares": 1000.0,
+        "costBasis": 100000.0,
+        "longInvestment": 40000.0,
+        "financedRemainingInvestment": 40000.0,
+        "marginDebt": 60000.0,
+        "shortOutstandingShares": 0.0,
+        "shortRemainingInvestment": 0.0,
+        "shortCumulativeInvestment": 0.0
+      },
+      "expected": {
+        "remaining": 40000.0,
+        "cumulative": 40000.0
+      }
+    },
+    {
+      "id": "pl_breakdown_moving_average_partial_sale_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "ProfitLossBreakdownSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ProfitLossBreakdownSupportTest.kt:18-33",
+      "description": "Moving-average partial sale splits realized/unrealized P&L and cost while preserving legacyTotalProfitLoss",
+      "inputs": {
+        "valuationDate": 3,
+        "legacyTotalProfitLoss": 15000.0,
+        "marginDayCount": 365,
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 1,
+            "recordTime": 1,
+            "type": "買進",
+            "buyPrice": 100.0,
+            "buyShares": 100.0,
+            "expense": 10000.0
+          },
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 2,
+            "recordTime": 2,
+            "type": "買進",
+            "buyPrice": 200.0,
+            "buyShares": 100.0,
+            "expense": 20000.0
+          },
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 3,
+            "recordTime": 3,
+            "type": "賣出",
+            "sellPrice": 250.0,
+            "sellShares": 100.0,
+            "income": 25000.0
+          }
+        ]
+      },
+      "expected": {
+        "realizedProfitLoss": 10000.0,
+        "unrealizedProfitLoss": 5000.0,
+        "realizedCost": 15000.0,
+        "unrealizedCost": 15000.0,
+        "soldShares": 100.0,
+        "sumProfitLoss": 15000.0
+      }
+    },
+    {
+      "id": "pl_breakdown_loss_reduction_no_cash_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "ProfitLossBreakdownSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ProfitLossBreakdownSupportTest.kt:100-118",
+      "description": "Loss capital reduction without cashReturned keeps total cost intact, raises unrealizedAverageCost, and creates no realized loss",
+      "inputs": {
+        "valuationDate": 2,
+        "legacyTotalProfitLoss": 0.0,
+        "marginDayCount": 365,
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 1,
+            "recordTime": 1,
+            "type": "買進",
+            "buyPrice": 100.0,
+            "buyShares": 100.0,
+            "expense": 10000.0
+          },
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 2,
+            "recordTime": 2,
+            "type": "減資",
+            "sharesBeforeReduction": 100.0,
+            "sharesAfterReduction": 80.0,
+            "capitalReductionRatio": 20.0,
+            "cashReturned": 0.0
+          }
+        ]
+      },
+      "expected": {
+        "realizedProfitLoss": 0.0,
+        "unrealizedProfitLoss": 0.0,
+        "realizedCost": 0.0,
+        "unrealizedCost": 10000.0,
+        "unrealizedAverageCost": 125.0,
+        "hasRealizedActivity": false
+      }
+    },
+    {
+      "id": "pl_breakdown_partial_short_cover_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "ProfitLossBreakdownSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ProfitLossBreakdownSupportTest.kt:173-205",
+      "description": "Partial short cover allocates opening income, cover expense, and accrued borrow fee proportionally while preserving legacy total P&L",
+      "inputs": {
+        "dayMillis": 86400000,
+        "valuationDateDays": 20,
+        "marginDayCount": 365,
+        "assumedMarketPriceAtValuation": 80.0,
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "dateDays": 0,
+            "type": "融券賣出",
+            "sellPrice": 100.0,
+            "sellShares": 1000.0,
+            "income": 100000.0,
+            "shortBorrowPrincipal": 100000.0,
+            "shortBorrowAnnualRate": 3.65,
+            "shortLotId": "short-1"
+          },
+          {
+            "stockCode": "2330",
+            "dateDays": 10,
+            "type": "買券還券",
+            "buyPrice": 90.0,
+            "buyShares": 400.0,
+            "expense": 36000.0,
+            "shortCoverLotId": "short-1",
+            "shortCoverShares": 400.0
+          }
+        ]
+      },
+      "expected": {
+        "realizedProfitLoss": 3960.0,
+        "unrealizedProfitLoss": 11880.0,
+        "coveredShortShares": 400.0,
+        "realizedCost": 40000.0,
+        "unrealizedCost": 60000.0
+      }
+    },
+    {
+      "id": "xirr_dst_leap_year_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "ReturnRateCalculator",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ReturnRateCalculatorTest.kt:52-64",
+      "description": "XIRR computes annual rate using calendar days in zoneId across leap year and DST transitions",
+      "inputs": {
+        "zoneId": "America/New_York",
+        "cashFlows": [
+          {
+            "localDate": "2024-01-01",
+            "amount": -1000.0
+          },
+          {
+            "localDate": "2025-01-01",
+            "amount": 1100.0
+          }
+        ]
+      },
+      "expected": {
+        "expectedRateFormula": "1.1^(365/366) - 1",
+        "approxRate": 0.09968592,
+        "tolerance": 1e-08
+      }
+    },
+    {
+      "id": "stock_dividend_tw_vs_us_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "StockDividendCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/data/StockDividendCalculationSupportTest.kt:8-31",
+      "description": "Stock dividend share calculation divides by 10.0 par value for TW and uses direct shares-per-share for US",
+      "inputs": {
+        "stockDividend": 0.45,
+        "exRightsShares": 1000.0
+      },
+      "expected": {
+        "twIssuedShares": 45.0,
+        "usIssuedShares": 450.0
+      }
+    },
+    {
+      "id": "taiwan_min_sell_fee_regular_vs_odd_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "TransactionCostSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionCostSupportTest.kt:8-24",
+      "description": "Taiwan minimum sell fee distinguishes 1000-share regular lots from odd lots",
+      "inputs": {
+        "minFeeRegular": 20.0,
+        "minFeeOddLot": 1.0,
+        "regularShares": 1000.0,
+        "oddShares": 10.0
+      },
+      "expected": {
+        "regularLotMinFee": 20.0,
+        "oddLotMinFee": 1.0
+      }
+    },
+    {
+      "id": "transaction_date_dst_cutoff_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "TransactionDateSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionDateSupportTest.kt:78-95",
+      "description": "replayCutoffMillis returns exact end-of-day across a 23-hour spring-forward DST date in America/New_York",
+      "inputs": {
+        "isoDate": "2026-03-08",
+        "storageZoneId": "America/New_York"
+      },
+      "expected": {
+        "nextInstantLocalDate": "2026-03-09",
+        "dayDurationMillis": 82800000
+      }
+    },
+    {
+      "id": "transaction_validation_isolation_and_legacy_split_01",
+      "group": "core_holdings_and_pl_engine",
+      "module": "TransactionValidationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionValidationSupportTest.kt:25-36, 118-133",
+      "description": "validateForWrite rejects ordinary buy with sell or short fields while permitting legacy fee on split",
+      "inputs": {
+        "buyWithSell": {
+          "stockCode": "2330",
+          "date": 1,
+          "recordTime": 1,
+          "type": "買進",
+          "buyPrice": 100.0,
+          "buyShares": 10.0,
+          "expense": 1000.0,
+          "sellPrice": 100.0,
+          "sellShares": 1.0
+        },
+        "buyWithShort": {
+          "stockCode": "2330",
+          "date": 1,
+          "recordTime": 1,
+          "type": "買進",
+          "buyPrice": 100.0,
+          "buyShares": 10.0,
+          "expense": 1000.0,
+          "shortBorrowPrincipal": 100.0
+        },
+        "legacySplit": {
+          "stockCode": "0050",
+          "date": 7,
+          "recordTime": 1,
+          "type": "分割",
+          "fee": 250.0,
+          "stockSplitRatio": 4.0,
+          "sharesBeforeSplit": 3300.0,
+          "sharesAfterSplit": 13200.0
+        }
+      },
+      "expected": {
+        "buyWithSellFieldsRejected": true,
+        "buyWithShortFieldsRejected": true,
+        "legacySplitWithFeeAccepted": true
+      }
+    },
+    {
+      "id": "margin_interest_purchase_to_repayment_01",
+      "group": "margin_and_short_selling",
+      "module": "MarginCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/MarginCalculationSupportTest.kt:18",
+      "description": "Margin daily simple interest accrues from purchase day inclusive and excludes repayment day (3 days on 80,000 at 36.5% / 365 = 240.0).",
+      "inputs": {
+        "dayCount": 365,
+        "valuationDateMillis": 259200000,
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 0,
+            "recordTime": 0,
+            "type": "融資買進",
+            "expense": 100000.0,
+            "buyPrice": 100.0,
+            "buyShares": 1000.0,
+            "marginPrincipal": 80000.0,
+            "marginAnnualRate": 36.5,
+            "marginLotId": "lot-1"
+          },
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 259200000,
+            "recordTime": 259200000,
+            "type": "融資還款",
+            "marginRepaymentLotId": "lot-1",
+            "marginRepayment": 80000.0
+          }
+        ]
+      },
+      "expected": {
+        "outstandingPrincipal": 0.0,
+        "accruedInterest": 240.0
+      }
+    },
+    {
+      "id": "margin_partial_repayment_actual_interest_02",
+      "group": "margin_and_short_selling",
+      "module": "MarginCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/MarginCalculationSupportTest.kt:70",
+      "description": "Partial margin principal repayment with actual broker interest replaces only the proportional accrued interest (40,000 / 100,000 = 40% settled; 60% of 1,000 = 600.0 remains accrued).",
+      "inputs": {
+        "dayCount": 365,
+        "valuationDateMillis": 864000000,
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 0,
+            "recordTime": 0,
+            "type": "融資買進",
+            "expense": 100000.0,
+            "buyPrice": 100.0,
+            "buyShares": 1000.0,
+            "marginPrincipal": 100000.0,
+            "marginAnnualRate": 36.5,
+            "marginLotId": "lot-1"
+          },
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 864000000,
+            "recordTime": 864000000,
+            "type": "融資還款",
+            "marginRepaymentLotId": "lot-1",
+            "marginRepayment": 40000.0,
+            "marginActualInterest": 450.0
+          }
+        ]
+      },
+      "expected": {
+        "outstandingPrincipal": 60000.0,
+        "accruedInterest": 600.0,
+        "actualInterestPaid": 450.0,
+        "totalInterestExpense": 1050.0
+      }
+    },
+    {
+      "id": "margin_interest_only_payment_03",
+      "group": "margin_and_short_selling",
+      "module": "MarginCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/MarginCalculationSupportTest.kt:90",
+      "description": "Interest-only margin payment (marginRepayment=0, marginActualInterest=1050) settles all accrued interest up to the payment date while leaving principal untouched.",
+      "inputs": {
+        "dayCount": 365,
+        "valuationDateMillis": 864000000,
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 0,
+            "recordTime": 0,
+            "type": "融資買進",
+            "expense": 100000.0,
+            "buyPrice": 100.0,
+            "buyShares": 1000.0,
+            "marginPrincipal": 100000.0,
+            "marginAnnualRate": 36.5,
+            "marginLotId": "lot-1"
+          },
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 864000000,
+            "recordTime": 864000000,
+            "type": "融資還款",
+            "marginRepaymentLotId": "lot-1",
+            "marginRepayment": 0.0,
+            "marginActualInterest": 1050.0
+          }
+        ]
+      },
+      "expected": {
+        "outstandingPrincipal": 100000.0,
+        "accruedInterest": 0.0,
+        "actualInterestPaid": 1050.0
+      }
+    },
+    {
+      "id": "margin_explicit_zero_self_funded_override_04",
+      "group": "margin_and_short_selling",
+      "module": "MarginCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/MarginCalculationSupportTest.kt:122",
+      "description": "Explicit manual zero self-funded override (marginSelfFunded=0.0, marginSelfFundedOverridden=true) is preserved instead of falling back to expense - principal.",
+      "inputs": {
+        "dayCount": 365,
+        "valuationDateMillis": 0,
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 0,
+            "recordTime": 0,
+            "type": "融資買進",
+            "expense": 100000.0,
+            "buyPrice": 100.0,
+            "buyShares": 1000.0,
+            "marginPrincipal": 60000.0,
+            "marginAnnualRate": 3.65,
+            "marginLotId": "lot-zero",
+            "marginSelfFunded": 0.0,
+            "marginSelfFundedOverridden": true
+          }
+        ]
+      },
+      "expected": {
+        "selfFundedCapital": 0.0
+      }
+    },
+    {
+      "id": "margin_backdated_repayment_overpay_05",
+      "group": "margin_and_short_selling",
+      "module": "MarginCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/MarginCalculationSupportTest.kt:134",
+      "description": "Inserting a backdated repayment when a later repayment already exhausts the lot fails hasValidRepaymentBalances.",
+      "inputs": {
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "date": 0,
+            "recordTime": 0,
+            "type": "融資買進",
+            "expense": 100000.0,
+            "buyPrice": 100.0,
+            "buyShares": 1000.0,
+            "marginPrincipal": 100000.0,
+            "marginAnnualRate": 3.65,
+            "marginLotId": "lot-1"
+          },
+          {
+            "stockCode": "2330",
+            "date": 86400000,
+            "recordTime": 86400000,
+            "type": "融資還款",
+            "marginRepaymentLotId": "lot-1",
+            "marginRepayment": 100000.0
+          },
+          {
+            "stockCode": "2330",
+            "date": 172800000,
+            "recordTime": 172800000,
+            "type": "融資還款",
+            "marginRepaymentLotId": "lot-1",
+            "marginRepayment": 60000.0
+          }
+        ]
+      },
+      "expected": {
+        "hasValidRepaymentBalances": false
+      }
+    },
+    {
+      "id": "short_partial_cover_borrow_fee_06",
+      "group": "margin_and_short_selling",
+      "module": "ShortSellingCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ShortSellingCalculationSupportTest.kt:14",
+      "description": "Short cover reduces only the selected lot and accrues borrow fee on 100,000 for 10 days (100.0) plus 60,000 for 10 days (60.0) = 160.0.",
+      "inputs": {
+        "dayCount": 365,
+        "valuationDateMillis": 1728000000,
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "date": 0,
+            "recordTime": 0,
+            "type": "融券賣出",
+            "sellPrice": 100.0,
+            "sellShares": 1000.0,
+            "shortBorrowPrincipal": 100000.0,
+            "shortBorrowAnnualRate": 3.65,
+            "shortLotId": "short-1"
+          },
+          {
+            "stockCode": "2330",
+            "date": 864000000,
+            "recordTime": 1,
+            "type": "買券還券",
+            "shortCoverLotId": "short-1",
+            "shortCoverShares": 400.0
+          }
+        ]
+      },
+      "expected": {
+        "outstandingShares": 600.0,
+        "accruedBorrowFee": 160.0,
+        "openedPrincipal": 60000.0
+      }
+    },
+    {
+      "id": "short_stock_split_adjusts_shares_and_cover_07",
+      "group": "margin_and_short_selling",
+      "module": "ShortSellingCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ShortSellingCalculationSupportTest.kt:121",
+      "description": "Stock split (10x) scales open short lot original and remaining shares so a 10,000-share cover is valid only when split is present.",
+      "inputs": {
+        "dayCount": 365,
+        "open": {
+          "stockCode": "2330",
+          "date": 0,
+          "recordTime": 0,
+          "type": "融券賣出",
+          "sellPrice": 100.0,
+          "sellShares": 1000.0,
+          "shortBorrowPrincipal": 100000.0,
+          "shortLotId": "short-1"
+        },
+        "split": {
+          "stockCode": "2330",
+          "date": 86400000,
+          "recordTime": 86400000,
+          "type": "分割",
+          "stockSplitRatio": 10.0,
+          "sharesBeforeSplit": 1000.0,
+          "sharesAfterSplit": 10000.0
+        },
+        "cover": {
+          "stockCode": "2330",
+          "date": 172800000,
+          "recordTime": 172800000,
+          "type": "買券還券",
+          "shortCoverLotId": "short-1",
+          "shortCoverShares": 10000.0
+        }
+      },
+      "expected": {
+        "outstandingSharesAfterSplit": 10000.0,
+        "validWithSplit": true,
+        "validWithoutSplit": false,
+        "outstandingSharesAfterCover": 0.0
+      }
+    },
+    {
+      "id": "short_fully_covered_xirr_includes_borrow_fee_08",
+      "group": "margin_and_short_selling",
+      "module": "ShortSellingCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ShortSellingCalculationSupportTest.kt:212",
+      "description": "Fully covered 1-year short with 100,000 principal, 90,000 cover expense, and 3.65% borrow fee deducts -3,650 accrued fee from terminal XIRR cash flow, yielding 6.35% XIRR.",
+      "inputs": {
+        "dayCount": 365,
+        "valuationDateMillis": 31536000000,
+        "currentPrice": 0.0,
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "date": 0,
+            "recordTime": 0,
+            "type": "融券賣出",
+            "sellPrice": 100.0,
+            "sellShares": 1000.0,
+            "income": 100000.0,
+            "shortBorrowPrincipal": 100000.0,
+            "shortBorrowAnnualRate": 3.65,
+            "shortLotId": "short-1"
+          },
+          {
+            "stockCode": "2330",
+            "date": 31536000000,
+            "recordTime": 31536000000,
+            "type": "買券還券",
+            "expense": 90000.0,
+            "shortCoverLotId": "short-1",
+            "shortCoverShares": 1000.0
+          }
+        ]
+      },
+      "expected": {
+        "terminalFeeCashFlowOffset": -3650.0,
+        "xirrPercent": 6.35,
+        "tolerance": 0.05
+      }
+    },
+    {
+      "id": "financing_validation_expense_mismatch_09",
+      "group": "margin_and_short_selling",
+      "module": "FinancingTransactionValidationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/FinancingTransactionValidationSupportTest.kt:163",
+      "description": "Repayment expense must equal marginRepayment + marginActualInterest and short compensation expense must equal shortCompensation.",
+      "inputs": {
+        "invalidRepayment": {
+          "stockCode": "2330",
+          "date": 2,
+          "recordTime": 2,
+          "type": "融資還款",
+          "marginRepaymentLotId": "margin-1",
+          "marginRepayment": 10000.0,
+          "marginActualInterest": 100.0,
+          "expense": 10000.0
+        },
+        "invalidCompensation": {
+          "stockCode": "2330",
+          "date": 4,
+          "recordTime": 4,
+          "type": "融券補償",
+          "shortCompensationLotId": "short-1",
+          "shortCompensation": 500.0,
+          "expense": 0.0
+        }
+      },
+      "expected": {
+        "invalidRepaymentRejected": true,
+        "invalidCompensationRejected": true
+      }
+    },
+    {
+      "id": "financing_validation_rejects_us_ticker_10",
+      "group": "margin_and_short_selling",
+      "module": "FinancingTransactionValidationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/FinancingTransactionValidationSupportTest.kt:216",
+      "description": "Financing market validation rejects US-shaped ticker 'AAPL' even if market argument is 'TW', and accepts TW ticker '2330' in 'TW'.",
+      "inputs": {
+        "market": "TW",
+        "americanStockCode": "AAPL",
+        "taiwanStockCode": "2330",
+        "type": "融券賣出"
+      },
+      "expected": {
+        "aaplErrorMessage": "融資融券僅支援台股",
+        "tw2330Error": null
+      }
+    },
+    {
+      "id": "add_tx_equal_timestamp_provisional_id_11",
+      "group": "margin_and_short_selling",
+      "module": "AddTransactionViewModel",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/AddTransactionLotIdSupportTest.kt:103",
+      "description": "New candidate transaction with id=0 and equal (date, recordTime) is assigned a provisional ID > maxExistingId so it validates after the existing opening lot.",
+      "inputs": {
+        "opening": {
+          "id": 10,
+          "stockCode": "2330",
+          "accountId": 1,
+          "date": 1000,
+          "recordTime": 2000,
+          "type": "融資買進",
+          "marginPrincipal": 100000.0,
+          "marginLotId": "margin-lot"
+        },
+        "candidate": {
+          "id": 0,
+          "stockCode": "2330",
+          "accountId": 1,
+          "date": 1000,
+          "recordTime": 2000,
+          "type": "融資還款",
+          "marginRepaymentLotId": "margin-lot",
+          "marginRepayment": 20000.0
+        }
+      },
+      "expected": {
+        "hasValidRepaymentBalances": true,
+        "candidateProvisionalIdGreaterThanOpeningId": true
+      }
+    },
+    {
+      "id": "add_tx_lot_selection_excludes_later_tx_12",
+      "group": "margin_and_short_selling",
+      "module": "AddTransactionViewModel",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/AddTransactionLotIdSupportTest.kt:131",
+      "description": "Lot selection when editing an intermediate transaction excludes the edited transaction and all later transactions by (date, recordTime, id) so full remaining principal is visible.",
+      "inputs": {
+        "existingTransactions": [
+          {
+            "id": 1,
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 1000,
+            "recordTime": 1000,
+            "type": "融資買進",
+            "marginPrincipal": 100000.0,
+            "marginLotId": "margin-lot"
+          },
+          {
+            "id": 3,
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 1000,
+            "recordTime": 3000,
+            "type": "融資還款",
+            "marginRepaymentLotId": "margin-lot",
+            "marginRepayment": 100000.0
+          }
+        ],
+        "editedCandidate": {
+          "id": 2,
+          "date": 1000,
+          "recordTime": 2000
+        }
+      },
+      "expected": {
+        "remainingPrincipal": 100000.0
+      }
+    },
+    {
+      "id": "historical_cashflow_incremental_prefix_01",
+      "group": "history_chart_and_calendar",
+      "module": "HistoricalTransactionCashFlowTimeline",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/HistoricalTransactionCashFlowTimelineTest.kt:10",
+      "description": "Collects buy, dividend, and sell cash flows incrementally as valuationDate advances without mutating earlier prefixes.",
+      "inputs": {
+        "transactions": [
+          {
+            "stockCode": "2330",
+            "date": 0,
+            "recordTime": 0,
+            "type": "買進",
+            "expense": 10000.0
+          },
+          {
+            "stockCode": "2330",
+            "date": 172800000,
+            "recordTime": 172800000,
+            "type": "配息",
+            "cashDividend": 2.0,
+            "exDividendShares": 100.0,
+            "dividendIncome": 180.0
+          },
+          {
+            "stockCode": "2330",
+            "date": 345600000,
+            "recordTime": 345600000,
+            "type": "賣出",
+            "income": 11000.0
+          }
+        ],
+        "valuationDates": [
+          86400000,
+          345600000
+        ]
+      },
+      "expected": {
+        "atDay1": [
+          {
+            "date": 0,
+            "amount": -10000.0
+          }
+        ],
+        "atDay4": [
+          {
+            "date": 0,
+            "amount": -10000.0
+          },
+          {
+            "date": 172800000,
+            "amount": 180.0
+          },
+          {
+            "date": 345600000,
+            "amount": 11000.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "historical_cashflow_date_mapper_02",
+      "group": "history_chart_and_calendar",
+      "module": "HistoricalTransactionCashFlowTimeline",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/HistoricalTransactionCashFlowTimelineTest.kt:49",
+      "description": "Applies transactionDateMapper to emitted CashFlow date while evaluating inclusion against raw transaction.date <= valuationDate.",
+      "inputs": {
+        "transaction": {
+          "stockCode": "AAPL",
+          "market": "US",
+          "date": 1000,
+          "recordTime": 1000,
+          "type": "買進",
+          "expense": 100.0
+        },
+        "dateMapperOffset": 5000,
+        "valuationDate": 1000
+      },
+      "expected": {
+        "cashFlows": [
+          {
+            "date": 6000,
+            "amount": -100.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "historical_cashflow_dividend_toggle_03",
+      "group": "history_chart_and_calendar",
+      "module": "HistoricalTransactionCashFlowTimeline",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/HistoricalTransactionCashFlowTimelineTest.kt:70",
+      "description": "Includes dividend via legacy income fallback when dividendIncome=0.0 and includeDividendIncome=true, and omits it when includeDividendIncome=false.",
+      "inputs": {
+        "transaction": {
+          "stockCode": "2330",
+          "date": 2000,
+          "recordTime": 2000,
+          "type": "配息",
+          "dividendIncome": 0.0,
+          "income": 250.0
+        },
+        "valuationDate": 2000
+      },
+      "expected": {
+        "included": [
+          {
+            "date": 2000,
+            "amount": 250.0
+          }
+        ],
+        "excluded": []
+      }
+    },
+    {
+      "id": "historical_long_position_company_actions_04",
+      "group": "history_chart_and_calendar",
+      "module": "HistoricalLongPositionTimeline",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ui/viewmodel/HistoricalLongPositionTimelineTest.kt:13",
+      "description": "Incremental advanceTo matches full replay across unordered transactions including buy, dividend, 2x split, sell, and 10% capital reduction with cash return.",
+      "inputs": {
+        "transactions": [
+          {
+            "id": 4,
+            "stockCode": "2330",
+            "date": 4000,
+            "recordTime": 1,
+            "type": "賣出",
+            "sellPrice": 15.0,
+            "sellShares": 4.0,
+            "income": 59.0
+          },
+          {
+            "id": 1,
+            "stockCode": "2330",
+            "date": 1000,
+            "recordTime": 1,
+            "type": "買進",
+            "buyShares": 10.0,
+            "expense": 100.0
+          },
+          {
+            "id": 3,
+            "stockCode": "2330",
+            "date": 3000,
+            "recordTime": 1,
+            "type": "分割",
+            "stockSplitRatio": 2.0,
+            "sharesBeforeSplit": 10.0,
+            "sharesAfterSplit": 20.0
+          },
+          {
+            "id": 5,
+            "stockCode": "2330",
+            "date": 5000,
+            "recordTime": 1,
+            "type": "減資",
+            "capitalReductionRatio": 10.0,
+            "sharesBeforeReduction": 16.0,
+            "sharesAfterReduction": 14.4,
+            "cashReturned": 12.0
+          },
+          {
+            "id": 2,
+            "stockCode": "2330",
+            "date": 2000,
+            "recordTime": 1,
+            "type": "配息",
+            "dividendIncome": 5.0
+          }
+        ],
+        "valuationDates": [
+          500,
+          1000,
+          2000,
+          3000,
+          4000,
+          5000
+        ]
+      },
+      "expected": {
+        "at500": {
+          "shares": 0.0
+        },
+        "at1000": {
+          "shares": 10.0,
+          "totalBuyExpense": 100.0
+        },
+        "at2000": {
+          "shares": 10.0,
+          "totalDividendIncome": 5.0
+        },
+        "at3000": {
+          "shares": 20.0,
+          "buySharesTotal": 20.0
+        },
+        "at4000": {
+          "shares": 16.0,
+          "sellSharesTotal": 4.0,
+          "totalSellIncome": 59.0,
+          "sellAmountBeforeFee": 60.0
+        },
+        "at5000": {
+          "shares": 14.4,
+          "totalSellIncome": 71.0,
+          "totalSellNetIncome": 59.0
+        }
+      }
+    },
+    {
+      "id": "historical_long_position_account_isolation_05",
+      "group": "history_chart_and_calendar",
+      "module": "HistoricalLongPositionTimeline",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ui/viewmodel/HistoricalLongPositionTimelineTest.kt:32",
+      "description": "Isolates 2x split and 10% capital reduction to accountId=1 without modifying accountId=2 shares.",
+      "inputs": {
+        "transactions": [
+          {
+            "id": 1,
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 1000,
+            "recordTime": 1,
+            "type": "買進",
+            "buyShares": 10.0,
+            "expense": 100.0
+          },
+          {
+            "id": 2,
+            "stockCode": "2330",
+            "accountId": 2,
+            "date": 1000,
+            "recordTime": 2,
+            "type": "買進",
+            "buyShares": 10.0,
+            "expense": 100.0
+          },
+          {
+            "id": 3,
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 2000,
+            "recordTime": 1,
+            "type": "分割",
+            "stockSplitRatio": 2.0,
+            "sharesBeforeSplit": 10.0,
+            "sharesAfterSplit": 20.0
+          },
+          {
+            "id": 4,
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 3000,
+            "recordTime": 1,
+            "type": "減資",
+            "capitalReductionRatio": 10.0,
+            "sharesBeforeReduction": 20.0,
+            "sharesAfterReduction": 18.0,
+            "cashReturned": 10.0
+          }
+        ],
+        "valuationDates": [
+          1000,
+          2000,
+          3000
+        ]
+      },
+      "expected": {
+        "at1000": {
+          "shares": 20.0
+        },
+        "at2000": {
+          "shares": 30.0
+        },
+        "at3000": {
+          "shares": 28.0,
+          "totalSellIncome": 10.0
+        }
+      }
+    },
+    {
+      "id": "history_chart_zones_and_close_millis_06",
+      "group": "history_chart_and_calendar",
+      "module": "HistoryChartCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/HistoryChartCalculationSupportTest.kt:19",
+      "description": "Resolves home XIRR zones (TW=Asia/Taipei, US=America/New_York, COMBINED=UTC), market close end millis (TW 13:30, US 16:00), and rejects invalid date 2026-02-30.",
+      "inputs": {
+        "date": "2026-07-01",
+        "invalidDate": "2026-02-30",
+        "modes": [
+          "TW",
+          "US",
+          "COMBINED"
+        ]
+      },
+      "expected": {
+        "zones": {
+          "TW": "Asia/Taipei",
+          "US": "America/New_York",
+          "COMBINED": "Z"
+        },
+        "twCloseIso": "2026-07-01T05:30:00Z",
+        "usCloseIso": "2026-07-01T20:00:00Z",
+        "invalidDateMillis": null
+      }
+    },
+    {
+      "id": "history_chart_coverage_and_price_lookup_07",
+      "group": "history_chart_and_calendar",
+      "module": "HistoryChartCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/HistoryChartCalculationSupportTest.kt:108",
+      "description": "Checks month-span history coverage (passes 1M, fails 6M for 2026-07 to 2026-08) and returns null instead of 0.0 when priceAtOrBefore has no earlier point.",
+      "inputs": {
+        "coveragePoints": [
+          {
+            "date": "2026-07-01",
+            "price": 100.0
+          },
+          {
+            "date": "2026-08-01",
+            "price": 110.0
+          }
+        ],
+        "lookupPoints": [
+          {
+            "date": "2026-07-20",
+            "price": 120.0
+          }
+        ],
+        "lookupDates": [
+          "2026-07-19",
+          "2026-07-20"
+        ]
+      },
+      "expected": {
+        "coverage1M": true,
+        "coverage6M": false,
+        "priceAt20260719": null,
+        "priceAt20260720": 120.0
+      }
+    },
+    {
+      "id": "performance_calendar_daily_monthly_08",
+      "group": "history_chart_and_calendar",
+      "module": "PerformanceCalendarCalculationSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/PerformanceCalendarCalculationSupportTest.kt:10",
+      "description": "Computes daily P&L and return %, ignores zero previous portfolio base for return %, anchors month-start P&L to previous trading day, and compounds monthly returns.",
+      "inputs": {
+        "normalGain": [
+          {
+            "date": "2026-08-03",
+            "marketValue": 100000.0,
+            "totalPL": 0.0
+          },
+          {
+            "date": "2026-08-04",
+            "marketValue": 100000.0,
+            "totalPL": 1000.0
+          }
+        ],
+        "buySameDay": [
+          {
+            "date": "2026-08-03",
+            "marketValue": 0.0,
+            "totalPL": 0.0
+          },
+          {
+            "date": "2026-08-04",
+            "marketValue": 100000.0,
+            "totalPL": 0.0
+          }
+        ],
+        "capitalReduction": [
+          {
+            "date": "2026-08-03",
+            "marketValue": 100000.0,
+            "totalPL": 0.0
+          },
+          {
+            "date": "2026-08-04",
+            "marketValue": 90000.0,
+            "totalPL": 10000.0
+          }
+        ],
+        "zeroPrevBase": [
+          {
+            "date": "2026-08-03",
+            "marketValue": 0.0,
+            "totalPL": 0.0
+          },
+          {
+            "date": "2026-08-04",
+            "marketValue": 100.0,
+            "totalPL": 100.0
+          }
+        ],
+        "compoundInputs": [
+          1.0,
+          1.0
+        ],
+        "augCrossMonth": {
+          "yearMonth": "2026-08",
+          "points": [
+            {
+              "date": "2026-07-31",
+              "marketValue": 100000.0,
+              "totalPL": 1000.0
+            },
+            {
+              "date": "2026-08-03",
+              "marketValue": 101000.0,
+              "totalPL": 2000.0
+            }
+          ]
+        }
+      },
+      "expected": {
+        "normalGain": {
+          "profitLoss": 1000.0,
+          "returnPercentage": 1.0
+        },
+        "buySameDay": {
+          "profitLoss": 0.0
+        },
+        "capitalReduction": {
+          "profitLoss": 10000.0
+        },
+        "zeroPrevBaseReturn": 0.0,
+        "compounded1PctTwice": 2.01,
+        "augCrossMonth": {
+          "profitLoss": 1000.0,
+          "returnPercentage": 1.0
+        }
+      }
+    },
+    {
+      "id": "stock_history_cache_and_expected_date_09",
+      "group": "history_chart_and_calendar",
+      "module": "StockHistoryCache",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/StockHistoryCacheTest.kt:21",
+      "description": "StockHistoryCache rejects stale generation writes after clear(), current-month cache requires finite price at latestExpectedHistoryDate (skipping weekends and pre-close days), and manual refresh bypasses current month only.",
+      "inputs": {
+        "cacheKey": "TW:2330_202601",
+        "latestChartMonth": "202608",
+        "latestChartDate": "2026-08-25",
+        "partialPoints": [
+          {
+            "date": "2026-08-24",
+            "price": 100.0
+          }
+        ],
+        "completePoints": [
+          {
+            "date": "2026-08-24",
+            "price": 100.0
+          },
+          {
+            "date": "2026-08-25",
+            "price": 101.0
+          }
+        ],
+        "twCloseCheckTimes": [
+          "2026-08-23T10:00:00+08:00[Asia/Taipei]",
+          "2026-08-24T10:00:00+08:00[Asia/Taipei]",
+          "2026-08-24T14:00:00+08:00[Asia/Taipei]"
+        ],
+        "mergePoints": [
+          {
+            "date": "2026-08-25",
+            "price": 100.0
+          },
+          {
+            "date": "2026-08-25",
+            "price": 105.0
+          }
+        ]
+      },
+      "expected": {
+        "stalePutAccepted": false,
+        "partialMonthReusable": false,
+        "completeMonthReusable": true,
+        "nanLatestReusable": false,
+        "forceRefreshCurrentMonthReusable": false,
+        "forceRefreshPastMonthReusable": true,
+        "expectedDateSunAug23": "2026-08-21",
+        "expectedDateMon10amAug24": "2026-08-21",
+        "expectedDateMon2pmAug24": "2026-08-24",
+        "mergedPrice": 105.0
+      }
+    },
+    {
+      "id": "history_loading_and_progress_tracker_10",
+      "group": "history_chart_and_calendar",
+      "module": "StockHistoryLoadingProgressTest / PortfolioHistoryProgressTrackerTest",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/StockHistoryLoadingProgressTest.kt:33",
+      "description": "Expanding 1M->6M->1Y reuses cached months in total step count, excludes unclosed current month before market close, and PortfolioHistoryProgressTracker aggregates out-of-order stocks monotonically.",
+      "inputs": {
+        "clockIso": "2026-08-25T06:00:00Z",
+        "preSeptCloseIso": "2026-09-01T02:00:00Z",
+        "stockCode": "2330",
+        "ranges": [
+          1,
+          6,
+          12
+        ],
+        "trackerEvents": [
+          {
+            "op": "update",
+            "stockIndex": 0,
+            "step": 1,
+            "total": 4
+          },
+          {
+            "op": "update",
+            "stockIndex": 1,
+            "step": 1,
+            "total": 1
+          },
+          {
+            "op": "update",
+            "stockIndex": 0,
+            "step": 3,
+            "total": 4
+          },
+          {
+            "op": "update",
+            "stockIndex": 0,
+            "step": 1,
+            "total": 4
+          },
+          {
+            "op": "markComplete",
+            "stockIndex": 0
+          }
+        ]
+      },
+      "expected": {
+        "stage1M": {
+          "progress": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "requested": [
+            "202607",
+            "202608"
+          ]
+        },
+        "stage6M": {
+          "progress": [
+            [
+              3,
+              7
+            ],
+            [
+              4,
+              7
+            ],
+            [
+              5,
+              7
+            ],
+            [
+              6,
+              7
+            ],
+            [
+              7,
+              7
+            ]
+          ],
+          "requested": [
+            "202602",
+            "202603",
+            "202604",
+            "202605",
+            "202606"
+          ]
+        },
+        "stage1Y": {
+          "progress": [
+            [
+              8,
+              13
+            ],
+            [
+              9,
+              13
+            ],
+            [
+              10,
+              13
+            ],
+            [
+              11,
+              13
+            ],
+            [
+              12,
+              13
+            ],
+            [
+              13,
+              13
+            ]
+          ],
+          "requested": [
+            "202508",
+            "202509",
+            "202510",
+            "202511",
+            "202512",
+            "202601"
+          ]
+        },
+        "preSeptClose": {
+          "progress": [
+            [
+              1,
+              1
+            ]
+          ],
+          "requested": []
+        },
+        "trackerSequence": [
+          0.125,
+          0.625,
+          0.875,
+          0.875,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "quote_incremental_publish_01",
+      "group": "market_data_and_edge_apis",
+      "module": "QuoteRefreshCoordinator",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/QuoteRefreshCoordinatorTest.kt:21-44",
+      "description": "Completed second TWSE batch and US single quote publish immediately while first TWSE batch is still blocked",
+      "inputs": {
+        "stocks": [
+          "TW:1",
+          "TW:2",
+          "TW:3",
+          "TW:4",
+          "TW:5",
+          "TW:6",
+          "TW:7",
+          "TW:8",
+          "TW:9",
+          "TW:10",
+          "US:AAPL"
+        ],
+        "useTwseBatches": true,
+        "blockedBatch": "1..5"
+      },
+      "expected": {
+        "earlyPublishedKeys": [
+          "TW:6",
+          "TW:7",
+          "TW:8",
+          "TW:9",
+          "TW:10",
+          "US:AAPL"
+        ],
+        "jobCompletedBeforeUnblock": false,
+        "totalResults": 11
+      }
+    },
+    {
+      "id": "quote_missing_row_fallback_preserve_02",
+      "group": "market_data_and_edge_apis",
+      "module": "QuoteRefreshCoordinator",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/QuoteRefreshCoordinatorTest.kt:46-74",
+      "description": "Successful batch row becomes visible before missing-row fallback finishes, and failed fallback preserves existing cached quotes",
+      "inputs": {
+        "initialCache": {
+          "TW:2": 80.0,
+          "US:AAPL": 90.0
+        },
+        "batchStocks": [
+          "TW:1",
+          "TW:2"
+        ],
+        "batchResult": {
+          "1": 101.0
+        },
+        "fallbackResult": {
+          "TW:2": null
+        }
+      },
+      "expected": {
+        "pricesAfterFirstPublish": {
+          "TW:1": 101.0,
+          "TW:2": 80.0,
+          "US:AAPL": 90.0
+        },
+        "fallbackUsedCount": 1
+      }
+    },
+    {
+      "id": "quote_shared_semaphore_permits_03",
+      "group": "market_data_and_edge_apis",
+      "module": "QuoteRefreshCoordinator",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/QuoteRefreshCoordinatorTest.kt:89-110",
+      "description": "Batches, US singles, and per-stock TW fallbacks share a 3-permit semaphore and propagate batch certificateFailure flag",
+      "inputs": {
+        "twStocksCount": 21,
+        "usStocksCount": 6,
+        "useTwseBatches": true,
+        "batchResult": "emptyWithCertificateFailure"
+      },
+      "expected": {
+        "peakConcurrentRequests": 3,
+        "finalActiveRequests": 0,
+        "fallbackCalls": 21,
+        "certificateFailureCount": 21,
+        "totalResults": 27
+      }
+    },
+    {
+      "id": "realtime_merge_maps_04",
+      "group": "market_data_and_edge_apis",
+      "module": "RealtimeStockDataService",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/RealtimeStockDataServiceTest.kt:34-52",
+      "description": "Merging realtime stock info maps replaces updated keys, keeps unaffected keys, and returns a new map instance",
+      "inputs": {
+        "current": {
+          "2330": 100.0,
+          "AAPL": 200.0
+        },
+        "updates": {
+          "2330": 101.0,
+          "TSM": 300.0
+        }
+      },
+      "expected": {
+        "size": 3,
+        "prices": {
+          "2330": 101.0,
+          "AAPL": 200.0,
+          "TSM": 300.0
+        },
+        "returnsNewMap": true
+      }
+    },
+    {
+      "id": "history_target_months_boundary_05",
+      "group": "market_data_and_edge_apis",
+      "module": "TwseStockHistoryService",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TwseStockHistoryServiceTest.kt:15-25",
+      "description": "targetHistoryMonths produces chronological YYYYMM strings anchored to market YearMonth",
+      "inputs": {
+        "rangeMonths": 1,
+        "months": [
+          "2026-08",
+          "2026-09"
+        ]
+      },
+      "expected": {
+        "augResult": [
+          "202607",
+          "202608"
+        ],
+        "sepResult": [
+          "202608",
+          "202609"
+        ]
+      }
+    },
+    {
+      "id": "tpex_otc_history_parse_06",
+      "group": "market_data_and_edge_apis",
+      "module": "TwseStockHistoryService",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TpexStockHistoryServiceTest.kt:30-48",
+      "description": "OTC TW stock queries TPEx tradingStock endpoint, converts ROC date 115/11/10 to 2026-11-10, and parses close price 1,085.00",
+      "inputs": {
+        "stock": {
+          "code": "6488",
+          "market": "TW",
+          "exchange": "OTC"
+        },
+        "rangeMonths": 0,
+        "clockUtc": "2026-11-10T06:00:00Z",
+        "rocRow": [
+          "115/11/10",
+          "1,000",
+          "1,000",
+          "1,080.00",
+          "1,090.00",
+          "1,070.00",
+          "1,085.00",
+          "5.00",
+          "10"
+        ]
+      },
+      "expected": {
+        "url": "https://www.tpex.org.tw/www/zh-tw/afterTrading/tradingStock",
+        "params": {
+          "code": "6488",
+          "date": "2026/11/01",
+          "response": "json"
+        },
+        "points": [
+          {
+            "date": "2026-11-10",
+            "price": 1085.0
+          }
+        ],
+        "savedPrice": 1085.0
+      }
+    },
+    {
+      "id": "holiday_incomplete_retry_cooldown_07",
+      "group": "market_data_and_edge_apis",
+      "module": "TaiwanHolidayCache",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TaiwanHolidayCacheTest.kt:80-95",
+      "description": "Incomplete downloaded holiday calendar is rejected without saving and retries after 300,000ms cooldown",
+      "inputs": {
+        "date": "2026-10-09",
+        "firstSnapshotDays": 1,
+        "secondSnapshotDays": 365,
+        "elapsedMillis": 300000
+      },
+      "expected": {
+        "firstAttemptIsHoliday": false,
+        "savesAfterFirstAttempt": 0,
+        "secondAttemptAfter5MinIsHoliday": true,
+        "savesAfterSecondAttempt": 1
+      }
+    },
+    {
+      "id": "holiday_newer_bundle_upgrade_08",
+      "group": "market_data_and_edge_apis",
+      "module": "TaiwanHolidayCache",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TaiwanHolidayCacheTest.kt:160-171",
+      "description": "Bundled Taiwan calendar with higher calendarVersion replaces older saved snapshot and persists update",
+      "inputs": {
+        "date": "2026-10-09",
+        "saved": {
+          "calendarVersion": 1,
+          "isHoliday": false
+        },
+        "bundled": {
+          "calendarVersion": 2,
+          "isHoliday": true
+        }
+      },
+      "expected": {
+        "isHoliday": true,
+        "persistedCalendarVersion": 2
+      }
+    },
+    {
+      "id": "tw_stock_list_completeness_09",
+      "group": "market_data_and_edge_apis",
+      "module": "StockDataFetcher",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TaiwanStockListCompletenessTest.kt:11-55",
+      "description": "Taiwan stock list completeness enforces Listed(2), OTC(4), Emerging(5) order and rejects missing or empty sections",
+      "inputs": {
+        "complete": {
+          "5": [
+            "7777"
+          ],
+          "2": [
+            "2330"
+          ],
+          "4": [
+            "6488"
+          ]
+        },
+        "missingOtc": {
+          "2": [
+            "2330"
+          ],
+          "5": [
+            "7777"
+          ]
+        },
+        "emptyListed": {
+          "2": [],
+          "4": [
+            "6488"
+          ],
+          "5": [
+            "7777"
+          ]
+        }
+      },
+      "expected": {
+        "combinedOrder": [
+          "2330",
+          "6488",
+          "7777"
+        ],
+        "missingOtcError": "台股上櫃清單取得失敗",
+        "emptyListedError": "台股上市清單解析結果為空"
+      }
+    },
+    {
+      "id": "us_stock_list_parse_10",
+      "group": "market_data_and_edge_apis",
+      "module": "StockDataFetcher",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/UsStockListParsingTest.kt:29-44",
+      "description": "Nasdaq Trader parser strips BOM/blank lines, filters Test Issue=Y, validates File Creation Time footer, and returns 100 valid Stock records",
+      "inputs": {
+        "header": "Symbol|Security Name|Test Issue|ETF",
+        "normalRows": 100,
+        "testIssueRows": 1,
+        "footer": "File Creation Time:|20260825",
+        "bomPrefix": "\n\n﻿"
+      },
+      "expected": {
+        "count": 100,
+        "firstCode": "STOCK0",
+        "firstStockType": "Stock",
+        "bomCount": 100
+      }
+    },
+    {
+      "id": "dividend_cache_sequence_ordering_11",
+      "group": "market_data_and_edge_apis",
+      "module": "DividendInfoCache",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/data/dividend/DividendInfoCacheTest.kt:190-222",
+      "description": "DataStore dividend cache retains newer requestSequence entry and rejects late older requestSequence write",
+      "inputs": {
+        "stockCode": "2330",
+        "firstWrite": {
+          "cashDividend": 5.0,
+          "requestSequence": 2000
+        },
+        "secondWrite": {
+          "cashDividend": 1.0,
+          "requestSequence": 1000
+        }
+      },
+      "expected": {
+        "retainedCashDividend": 5.0,
+        "retainedRequestSequence": 2000
+      }
+    },
+    {
+      "id": "yahoo_dividend_html_parse_12",
+      "group": "market_data_and_edge_apis",
+      "module": "YahooDividendRepository",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/data/dividend/YahooDividendRepositoryTest.kt:10-32",
+      "description": "parseYahooDividendPage skips rows with empty belonging period (cols[3]) and parses comma-formatted amounts and date",
+      "inputs": {
+        "rows": [
+          {
+            "period": "",
+            "cash": "1.20",
+            "stock": "0.30",
+            "date": "2025/08/08"
+          },
+          {
+            "period": "2024",
+            "cash": "1,000",
+            "stock": "0.45",
+            "date": "2024/08/08"
+          }
+        ]
+      },
+      "expected": {
+        "cashDividend": {
+          "amount": 1000.0,
+          "date": "2024/08/08"
+        },
+        "stockDividend": {
+          "amount": 0.45,
+          "date": "2024/08/08"
+        }
+      }
+    },
+    {
+      "id": "csv_import_big5_encoding_01",
+      "group": "import_export_and_backup",
+      "module": "CsvService",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/CsvServiceTest.kt:70",
+      "description": "Imports a Big5-encoded CSV (without BOM) saved by Traditional Chinese Excel and decodes stockName, transaction type, and expense accurately.",
+      "inputs": {
+        "encoding": "Big5",
+        "hasBom": false,
+        "stockName": "台積電",
+        "type": "融資買進",
+        "expense": 100000.0
+      },
+      "expected": {
+        "stockName": "台積電",
+        "type": "融資買進",
+        "expense": 100000.0
+      }
+    },
+    {
+      "id": "csv_import_excel_dates_and_grouped_numbers_02",
+      "group": "import_export_and_backup",
+      "module": "CsvService",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/CsvServiceTest.kt:101",
+      "description": "Parses slash and hyphen Excel dates/record times, quoted grouped thousands numbers, and preserves leading zeros in stock codes.",
+      "inputs": {
+        "separators": [
+          "/",
+          "-"
+        ],
+        "date": "2026{sep}11{sep}5",
+        "recordTime": "2026{sep}11{sep}5 09:08:07.123",
+        "buyShares": "\"1,000\"",
+        "expense": "\"100,000.25\"",
+        "stockCode": "0050"
+      },
+      "expected": {
+        "stockCode": "0050",
+        "buyShares": 1000.0,
+        "expense": 100000.25,
+        "datePattern": "2026/11/05",
+        "recordTimePattern": "2026/11/05 09:08:07.123"
+      }
+    },
+    {
+      "id": "csv_round_trip_nhi_premium_03",
+      "group": "import_export_and_backup",
+      "module": "CsvService",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/CsvServiceTest.kt:237",
+      "description": "Round-trips a TW cash dividend transaction preserving dividendIncome and supplementaryHealthInsurancePremium.",
+      "inputs": {
+        "stockCode": "2330",
+        "type": "配息",
+        "cashDividend": 100.0,
+        "exDividendShares": 1000.0,
+        "fee": 10.0,
+        "income": 97880.0,
+        "dividendIncome": 97880.0,
+        "supplementaryHealthInsurancePremium": 2110.0
+      },
+      "expected": {
+        "supplementaryHealthInsurancePremium": 2110.0,
+        "dividendIncome": 97880.0
+      }
+    },
+    {
+      "id": "csv_old_format_self_funded_override_false_04",
+      "group": "import_export_and_backup",
+      "module": "CsvService",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/CsvServiceTest.kt:267",
+      "description": "Old CSV lacking the 融資自備款是否覆寫 column imports marginSelfFunded without falsely inferring marginSelfFundedOverridden = true.",
+      "inputs": {
+        "type": "融資買進",
+        "expense": 100000.0,
+        "marginPrincipal": 60000.0,
+        "marginSelfFunded": 40000.0,
+        "removedHeader": "融資自備款是否覆寫"
+      },
+      "expected": {
+        "marginSelfFunded": 40000.0,
+        "marginSelfFundedOverridden": false
+      }
+    },
+    {
+      "id": "csv_provisional_import_ids_same_timestamp_05",
+      "group": "import_export_and_backup",
+      "module": "CsvService",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/CsvServiceTest.kt:517",
+      "description": "assignProvisionalImportIds assigns IDs strictly greater than existing IDs so a same-timestamp margin repayment validates after its existing opening lot.",
+      "inputs": {
+        "existingOpening": {
+          "id": 10,
+          "stockCode": "2330",
+          "accountId": 1,
+          "date": 1,
+          "recordTime": 1,
+          "type": "融資買進",
+          "marginPrincipal": 60000.0,
+          "marginLotId": "margin-1"
+        },
+        "importedRepayment": {
+          "id": 0,
+          "stockCode": "2330",
+          "accountId": 1,
+          "date": 1,
+          "recordTime": 1,
+          "type": "融資還款",
+          "marginRepaymentLotId": "margin-1",
+          "marginRepayment": 10000.0
+        }
+      },
+      "expected": {
+        "validBeforeProvisionalIds": false,
+        "provisionalIdGreaterThanExisting": true,
+        "validAfterProvisionalIds": true
+      }
+    },
+    {
+      "id": "csv_dedup_existing_and_repeated_rows_06",
+      "group": "import_export_and_backup",
+      "module": "CsvTransactionDedupSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/CsvTransactionDedupSupportTest.kt:13",
+      "description": "Deduplicates imported rows matching existing transactions and repeated rows within the import while retaining distinct recordTimes.",
+      "inputs": {
+        "existing": [
+          {
+            "id": 41,
+            "stockCode": "2330",
+            "recordTime": 100
+          }
+        ],
+        "imported": [
+          {
+            "stockCode": "2330",
+            "recordTime": 100
+          },
+          {
+            "stockCode": "2330",
+            "recordTime": 100
+          },
+          {
+            "stockCode": "2330",
+            "recordTime": 101
+          }
+        ]
+      },
+      "expected": {
+        "keptRecordTimes": [
+          101
+        ]
+      }
+    },
+    {
+      "id": "csv_dedup_legacy_market_repair_alias_07",
+      "group": "import_export_and_backup",
+      "module": "CsvTransactionDedupSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/CsvTransactionDedupSupportTest.kt:57",
+      "description": "Builds legacy market repair alias US:2330 -> TW even when a canonical TW:2330 stock already exists, preventing duplicate import of legacy US-tagged 2330 transactions.",
+      "inputs": {
+        "importedStockKeys": [
+          {
+            "market": "TW",
+            "code": "2330"
+          }
+        ],
+        "existingStocksByCode": {
+          "2330": [
+            {
+              "code": "2330",
+              "market": "TW"
+            },
+            {
+              "code": "2330",
+              "market": "US"
+            }
+          ]
+        },
+        "existingTransactions": [
+          {
+            "id": 41,
+            "stockCode": "2330",
+            "market": "US",
+            "recordTime": 100
+          }
+        ],
+        "importedTransactions": [
+          {
+            "stockCode": "2330",
+            "market": "TW",
+            "recordTime": 100
+          }
+        ]
+      },
+      "expected": {
+        "aliases": {
+          "US:2330": "TW"
+        },
+        "newTransactions": []
+      }
+    },
+    {
+      "id": "asset_balance_utf8_round_trip_08",
+      "group": "import_export_and_backup",
+      "module": "AssetBalanceBackupCodec",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/AssetBalanceBackupTest.kt:15",
+      "description": "AssetBalanceBackupCodec round-trips multiline/quoted names, decimals, zero amounts, BOM-prefixed JSON, and empty AssetBalances.",
+      "inputs": {
+        "bankDeposits": [
+          {
+            "id": 1,
+            "name": "台幣存款\n備用金 \"A\"",
+            "amount": 12345.67
+          },
+          {
+            "id": 2,
+            "name": "零餘額",
+            "amount": 0.0
+          }
+        ],
+        "loans": [
+          {
+            "id": 1,
+            "name": "房貸",
+            "amount": 99999.12
+          }
+        ]
+      },
+      "expected": {
+        "roundTripEqual": true,
+        "bomDecodeEqual": true,
+        "emptyRoundTripEqual": true
+      }
+    },
+    {
+      "id": "asset_balance_rejects_invalid_and_overflow_09",
+      "group": "import_export_and_backup",
+      "module": "AssetBalanceBackupCodec",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/AssetBalanceBackupTest.kt:34",
+      "description": "AssetBalanceBackupCodec rejects non-positive IDs, blank names, negative/NaN/Infinity amounts, duplicate IDs, and overflow sums.",
+      "inputs": {
+        "invalidCases": [
+          "deposit.id=0",
+          "loan.id=-1",
+          "loan.name=\" \"",
+          "loan.amount=-1.0",
+          "loan.amount=NaN",
+          "loan.amount=Infinity",
+          "duplicate deposit.id",
+          "deposit.amount=MAX_VALUE & loan.amount=MAX_VALUE",
+          "json amount=-1.0",
+          "json amount=1e999"
+        ]
+      },
+      "expected": {
+        "allRejected": true
+      }
+    },
+    {
+      "id": "settings_import_row_error_context_10",
+      "group": "import_export_and_backup",
+      "module": "SettingsViewModel",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/SettingsImportSupportTest.kt:17",
+      "description": "describeCsvImportRow formats source row number, source id, stockCode, transaction type, and accountId for error reporting.",
+      "inputs": {
+        "sourceRowNumber": 136,
+        "sourceId": "413",
+        "stockCode": "0050",
+        "accountId": 1,
+        "type": "分割"
+      },
+      "expected": {
+        "formatted": "（CSV 第 136 列，id=413，股號=0050，交易=分割，帳戶=1）"
+      }
+    },
+    {
+      "id": "settings_import_required_transaction_keys_11",
+      "group": "import_export_and_backup",
+      "module": "SettingsViewModel",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/SettingsImportSupportTest.kt:40",
+      "description": "requiredExistingTransactionKeysForImport loads target markets plus only legacy mis-marketed keys needing repair.",
+      "inputs": {
+        "importedStockKeys": [
+          {
+            "market": "TW",
+            "code": "2330"
+          },
+          {
+            "market": "US",
+            "code": "AAPL"
+          }
+        ],
+        "existingStocksByCode": {
+          "2330": [
+            {
+              "code": "2330",
+              "market": "US"
+            }
+          ],
+          "AAPL": [
+            {
+              "code": "AAPL",
+              "market": "US"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "requiredKeys": [
+          {
+            "market": "TW",
+            "code": "2330"
+          },
+          {
+            "market": "US",
+            "code": "AAPL"
+          },
+          {
+            "market": "US",
+            "code": "2330"
+          }
+        ]
+      }
+    },
+    {
+      "id": "stock_search_escape_like_wildcards_12",
+      "group": "import_export_and_backup",
+      "module": "AddTransactionViewModel",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/StockSearchSupportTest.kt:16",
+      "description": "escapeStockSearchLikePattern escapes %, _, and \\ with backslashes so SQLite LIKE treats them as literal characters.",
+      "inputs": {
+        "query": "A%B_C\\D"
+      },
+      "expected": {
+        "escaped": "A\\%B\\_C\\\\D"
+      }
+    },
+    {
+      "id": "tx_form_auto_calc_cost_guard_01",
+      "group": "ui_screens_viewmodels_and_navigation",
+      "module": "TransactionFormSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionFormSupportTest.kt:28-32",
+      "description": "Verify edit cost recalculation guard: editing skips auto-recalculation until user modifies trade inputs, whereas new transactions always auto-calculate.",
+      "inputs": {
+        "cases": [
+          {
+            "transactionId": 1,
+            "hasUserEditedTradeInputs": false
+          },
+          {
+            "transactionId": 1,
+            "hasUserEditedTradeInputs": true
+          },
+          {
+            "transactionId": null,
+            "hasUserEditedTradeInputs": false
+          }
+        ]
+      },
+      "expected": {
+        "editWithoutUserInput": false,
+        "editWithUserInput": true,
+        "newTransactionWithoutUserInput": true
+      }
+    },
+    {
+      "id": "tx_form_margin_self_funded_autofill_02",
+      "group": "ui_screens_viewmodels_and_navigation",
+      "module": "TransactionFormSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionFormSupportTest.kt:101-106",
+      "description": "Verify margin self-funded auto-fill computes expense minus principal when valid and non-negative, and returns empty string on overpayment or blank principal.",
+      "inputs": {
+        "cases": [
+          {
+            "expense": 100000.0,
+            "marginPrincipalText": "60000"
+          },
+          {
+            "expense": 100000.0,
+            "marginPrincipalText": "100000"
+          },
+          {
+            "expense": 100000.0,
+            "marginPrincipalText": "100001"
+          },
+          {
+            "expense": 100000.0,
+            "marginPrincipalText": ""
+          }
+        ]
+      },
+      "expected": {
+        "results": [
+          "40000",
+          "0",
+          "",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "tx_form_margin_repayment_validation_03",
+      "group": "ui_screens_viewmodels_and_navigation",
+      "module": "TransactionFormSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionFormSupportTest.kt:124-135",
+      "description": "Verify margin repayment validation allows interest-only payments (principal 0 or blank) and rejects empty, negative, non-finite, or principal overpayments.",
+      "inputs": {
+        "validCases": [
+          {
+            "repayment": "",
+            "actualInterest": "120",
+            "remainingPrincipal": 0.0
+          },
+          {
+            "repayment": "0",
+            "actualInterest": "120",
+            "remainingPrincipal": 50000.0
+          }
+        ],
+        "invalidCases": [
+          {
+            "repayment": "",
+            "actualInterest": "",
+            "remainingPrincipal": 50000.0
+          },
+          {
+            "repayment": "-1",
+            "actualInterest": "120",
+            "remainingPrincipal": 50000.0
+          },
+          {
+            "repayment": "50001",
+            "actualInterest": "",
+            "remainingPrincipal": 50000.0
+          },
+          {
+            "repayment": "0",
+            "actualInterest": "Infinity",
+            "remainingPrincipal": 50000.0
+          }
+        ]
+      },
+      "expected": {
+        "validCases": [
+          true,
+          true
+        ],
+        "invalidCases": [
+          false,
+          false,
+          false,
+          false
+        ]
+      }
+    },
+    {
+      "id": "tx_form_sell_margin_repayment_04",
+      "group": "ui_screens_viewmodels_and_navigation",
+      "module": "TransactionFormSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionFormSupportTest.kt:138-143",
+      "description": "Verify sell-to-repay-margin defaults repayment to sell income only when input is blank, honors explicit amount, and returns null on invalid numbers.",
+      "inputs": {
+        "sellIncome": 80000.0,
+        "inputs": [
+          "",
+          "30000",
+          "not-a-number",
+          "Infinity"
+        ]
+      },
+      "expected": {
+        "blank": 80000.0,
+        "explicit": 30000.0,
+        "invalidText": null,
+        "infinity": null
+      }
+    },
+    {
+      "id": "tx_form_date_picker_timezone_roundtrip_05",
+      "group": "ui_screens_viewmodels_and_navigation",
+      "module": "TransactionFormSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionFormSupportTest.kt:146-156",
+      "description": "Verify local afternoon timestamp and DatePicker UTC midnight both normalize to the same Asia/Taipei start-of-day millis and round-trip back to UTC midnight.",
+      "inputs": {
+        "zoneId": "Asia/Taipei",
+        "localDate": "2026-07-25",
+        "afternoonLocalTime": "15:30",
+        "pickerUtcMidnight": "2026-07-25T00:00:00Z"
+      },
+      "expected": {
+        "normalizedAfternoon": 1784908800000,
+        "normalizedPickerUtc": 1784908800000,
+        "roundTrippedPickerUtc": 1784995200000
+      }
+    },
+    {
+      "id": "tx_form_sell_margin_over_income_cashflow_06",
+      "group": "ui_screens_viewmodels_and_navigation",
+      "module": "TransactionFormSupport",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionFormSupportTest.kt:159-172",
+      "description": "Verify sell transaction repaying more margin principal + actual interest than sell income produces negative net cash flow (-5500.0).",
+      "inputs": {
+        "type": "賣出",
+        "stockCode": "2330",
+        "income": 50000.0,
+        "marginRepaymentLotId": "lot-1",
+        "marginRepayment": 55000.0,
+        "marginActualInterest": 500.0
+      },
+      "expected": {
+        "cashFlowAmount": -5500.0
+      }
+    },
+    {
+      "id": "tx_detail_state_missing_and_ready_07",
+      "group": "ui_screens_viewmodels_and_navigation",
+      "module": "TransactionDetailViewModel",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/TransactionDetailStateTest.kt:14-37",
+      "description": "Verify TransactionDetailState maps null transaction/stock to Missing and valid pair to Ready.",
+      "inputs": {
+        "missingInput": {
+          "transaction": null,
+          "stock": null
+        },
+        "readyInput": {
+          "transaction": {
+            "id": 7,
+            "stockCode": "2330",
+            "market": "TW",
+            "type": "買進"
+          },
+          "stock": {
+            "name": "台積電",
+            "code": "2330",
+            "market": "TW"
+          }
+        }
+      },
+      "expected": {
+        "missingState": "Missing",
+        "readyState": "Ready",
+        "stockName": "台積電",
+        "transactionId": 7
+      }
+    },
+    {
+      "id": "transactions_vm_cashflow_totals_by_market_08",
+      "group": "ui_screens_viewmodels_and_navigation",
+      "module": "TransactionsViewModel",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ui/viewmodel/TransactionsViewModelTest.kt:82-110",
+      "description": "Verify transaction date sections aggregate daily cash-flow totals separately by market (TW before US) and recompute totals after search filtering.",
+      "inputs": {
+        "accountId": 1,
+        "transactions": [
+          {
+            "id": 1,
+            "stockCode": "2330",
+            "market": "TW",
+            "date": 0,
+            "type": "買進",
+            "expense": 1000.0
+          },
+          {
+            "id": 2,
+            "stockCode": "2330",
+            "market": "TW",
+            "date": 0,
+            "type": "賣出",
+            "income": 1500.0
+          },
+          {
+            "id": 3,
+            "stockCode": "AAPL",
+            "market": "US",
+            "date": 0,
+            "type": "配息",
+            "income": 12.5
+          }
+        ],
+        "searchQuery": "aapl"
+      },
+      "expected": {
+        "initialTotals": [
+          {
+            "market": "TW",
+            "income": 1500.0,
+            "expense": 1000.0
+          },
+          {
+            "market": "US",
+            "income": 12.5,
+            "expense": 0.0
+          }
+        ],
+        "filteredAaplTotals": [
+          {
+            "market": "US",
+            "income": 12.5,
+            "expense": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "id": "transactions_vm_search_filtering_09",
+      "group": "ui_screens_viewmodels_and_navigation",
+      "module": "TransactionsViewModel",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ui/viewmodel/TransactionsViewModelTest.kt:113-127",
+      "description": "Verify multi-term whitespace-split search matches stockCode, stockName, type, note, and formatted date using AND semantics while preserving original order.",
+      "inputs": {
+        "timeZone": "UTC",
+        "locale": "en-US",
+        "transactions": [
+          {
+            "id": 1,
+            "stockCode": "2330",
+            "stockName": "台積電",
+            "market": "TW",
+            "date": 86400000,
+            "recordTime": 3,
+            "type": "買進"
+          },
+          {
+            "id": 2,
+            "stockCode": "AAPL",
+            "stockName": "Apple",
+            "market": "US",
+            "date": 86400000,
+            "recordTime": 2,
+            "type": "買進",
+            "note": "定期定額"
+          },
+          {
+            "id": 3,
+            "stockCode": "AAPL",
+            "stockName": "Apple",
+            "market": "US",
+            "date": 0,
+            "recordTime": 1,
+            "type": "配息"
+          }
+        ]
+      },
+      "expected": {
+        " aApL ": [
+          2,
+          3
+        ],
+        "台積": [
+          1
+        ],
+        "Apple 配息": [
+          3
+        ],
+        "定期定額": [
+          2
+        ],
+        "1970/01/02": [
+          1,
+          2
+        ],
+        "2330 配息": [],
+        "查無股票": []
+      }
+    },
+    {
+      "id": "dividend_info_tw_stock_refs_scope_10",
+      "group": "ui_screens_viewmodels_and_navigation",
+      "module": "DividendInfoViewModel",
+      "source_test": "app/src/test/java/com/rsps1008/stockify/ui/viewmodel/DividendInfoViewModelTest.kt:38-87",
+      "description": "Verify buildTaiwanStockRefs scopes strictly to TW market holdings in the active account up to valuationDateMillis, excluding US tickers even with matching stockCode.",
+      "inputs": {
+        "accountId": 1,
+        "stocks": [
+          {
+            "name": "台積電",
+            "code": "2330",
+            "market": "TW"
+          },
+          {
+            "name": "Apple",
+            "code": "AAPL",
+            "market": "US"
+          },
+          {
+            "name": "聯電",
+            "code": "2303",
+            "market": "TW"
+          }
+        ],
+        "transactions": [
+          {
+            "id": 1,
+            "stockCode": "2330",
+            "accountId": 1,
+            "date": 100,
+            "type": "買進"
+          },
+          {
+            "id": 2,
+            "stockCode": "AAPL",
+            "accountId": 1,
+            "date": 100,
+            "type": "買進"
+          },
+          {
+            "id": 3,
+            "stockCode": "2303",
+            "accountId": 2,
+            "date": 100,
+            "type": "買進"
+          },
+          {
+            "id": 4,
+            "stockCode": "2303",
+            "accountId": 1,
+            "date": 200,
+            "type": "買進"
+          }
+        ],
+        "valuationDates": [
+          150,
+          250
+        ],
+        "sameCodeUsTest": {
+          "stocks": [
+            {
+              "name": "台股 ABC",
+              "code": "ABC",
+              "market": "TW"
+            },
+            {
+              "name": "美股 ABC",
+              "code": "ABC",
+              "market": "US"
+            }
+          ],
+          "transactions": [
+            {
+              "id": 1,
+              "stockCode": "ABC",
+              "market": "US",
+              "accountId": 1,
+              "date": 100,
+              "type": "買進"
+            }
+          ],
+          "valuationDate": 150
+        }
+      },
+      "expected": {
+        "at150": [
+          {
+            "stockCode": "2330",
+            "stockName": "台積電"
+          }
+        ],
+        "at250": [
+          {
+            "stockCode": "2330",
+            "stockName": "台積電"
+          },
+          {
+            "stockCode": "2303",
+            "stockName": "聯電"
+          }
+        ],
+        "sameCodeUsExcluded": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+# Lovable Cloud / Supabase project configuration template for stockify-web
+project_id = "stockify-web"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[auth]
+enabled = true
+site_url = "http://localhost:8080"
+additional_redirect_urls = ["http://localhost:8080/**"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+skip_nonce_check = false
+
+[functions.market-quotes]
+verify_jwt = true
+
+[functions.market-history]
+verify_jwt = true
+
+[functions.market-index]
+verify_jwt = true
+
+[functions.exchange-rate]
+verify_jwt = true
+
+[functions.taiwan-calendar]
+verify_jwt = true
+
+[functions.stock-list-sync]
+verify_jwt = true
+
+[functions.dividend-info]
+verify_jwt = true
