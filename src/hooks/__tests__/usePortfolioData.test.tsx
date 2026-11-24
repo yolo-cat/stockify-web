@@ -48,6 +48,22 @@ describe("usePortfolioData", () => {
     expect(result.current.holdingsUiState.marketValue).toBeGreaterThan(0);
     expect(result.current.assetOverviewUiState.totalBankDeposit).toBe(730000);
     expect(result.current.assetOverviewUiState.totalLoan).toBe(3200000);
+
+    // Verify usStockValue is converted to TWD and matches sum of US entries in stockValues
+    const expectedUsTwd =
+      result.current.holdingsUiState.usMarketValue *
+      result.current.effectiveUsdToTwdRate;
+    const usEntriesSum = result.current.assetOverviewUiState.stockValues
+      .filter((s) => s.stock.market === StockMarket.US)
+      .reduce((sum, s) => sum + s.marketValue, 0);
+    expect(result.current.assetOverviewUiState.usStockValue).toBeCloseTo(
+      expectedUsTwd,
+      6,
+    );
+    expect(result.current.assetOverviewUiState.usStockValue).toBeCloseTo(
+      usEntriesSum,
+      6,
+    );
   });
 
   it("validates before adding transactions and blocks deleting referenced margin/short lots", async () => {
