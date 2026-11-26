@@ -6,7 +6,7 @@ import {
   jsonResponse,
   requireAuthHeader,
 } from "../_shared/cors.ts";
-import { chunkArray, fetchTextWithRetry } from "../_shared/http.ts";
+import { chunkArray, fetchTextWithRetry, stripHtmlTags } from "../_shared/http.ts";
 
 interface StockRecord {
   market: "TW" | "US";
@@ -30,8 +30,7 @@ const US_MOBILE_HEADERS: Record<string, string> = {
 };
 
 function stripTags(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, "")
+  return stripHtmlTags(html)
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .trim();

@@ -50,6 +50,16 @@ export function chunkArray<T>(items: T[], size: number): T[][] {
   return result;
 }
 
+export function stripHtmlTags(html: string): string {
+  let text = html;
+  let prev: string;
+  do {
+    prev = text;
+    text = text.replace(/<[^>]*>/g, "");
+  } while (text !== prev);
+  return text.replace(/[<>]/g, "").trim();
+}
+
 export function parseFiniteNumber(raw: unknown): number | null {
   if (typeof raw === "number") {
     return Number.isFinite(raw) ? raw : null;
