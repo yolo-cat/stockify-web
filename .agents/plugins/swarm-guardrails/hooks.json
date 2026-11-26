@@ -1,6 +1,6 @@
 {
   "swarm-pretool-guard": {
-    "enabled": false,
+    "enabled": true,
     "PreToolUse": [
       {
         "matcher": "run_command|read_file|view_file|write_file|edit_file|write_to_file|replace_file_content|multi_replace_file_content",

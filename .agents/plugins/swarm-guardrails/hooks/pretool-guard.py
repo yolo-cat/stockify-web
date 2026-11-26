@@ -19,12 +19,12 @@ import sys
 
 ENV_SECRET_PATH_PATTERN = r"(^|/)\.env(\.(?!example$|sample$|template$)[^/]+)?$"
 FORBIDDEN_PATH_PATTERNS = [
-    r"(^|/)supabase/migrations/\d+.*\.sql$",
-    r"(^|/)src/integrations/supabase/types\.ts$",
     r"(^|/)\.agents/plugins/swarm-guardrails/",
     ENV_SECRET_PATH_PATTERN,
 ]
 PROTECTED_PATH_PATTERNS = [
+    r"(^|/)supabase/migrations/\d+.*\.sql$",
+    r"(^|/)src/integrations/supabase/types\.ts$",
     r"(^|/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$",
     r"(^|/)vite\.config\.(ts|js|mjs)$",
     r"(^|/)supabase/config\.toml$",
@@ -32,17 +32,19 @@ PROTECTED_PATH_PATTERNS = [
     r"(^|/)src/integrations/supabase/client\.ts$",
     r"(^|/)src/App\.tsx$",
 ]
-DENIED_COMMAND_PATTERNS = [
-    (r"\bgit\b.*\bpush\b", "Remote push is blocked by project guardrails; ask the user first."),
+ALWAYS_DENIED_COMMAND_PATTERNS = [
+    (r"\b(supabase\s+db\s+reset|prisma\s+db\s+push\s+--force-reset|dropdb)\b", "Destructive DB reset blocked."),
+]
+PROTECTED_COMMAND_PATTERNS = [
+    (r"\bgit\b.*\bpush\b", "Remote push requires confirmation in interactive mode and is blocked in /swarm."),
     (
         r"\bnpm\b.*(?<!-)\b(install|i|ci|uninstall|update)\b",
-        "Direct npm dependency mutation is blocked during sprint; coordinate via @coordinator.",
+        "Direct npm dependency mutation requires confirmation in interactive mode and is blocked in /swarm.",
     ),
     (
         r"\b(pnpm|yarn)\b.*\b(add|install|remove)\b",
-        "Use npm only and coordinate dependency changes via @coordinator.",
+        "Package manager dependency mutation requires confirmation in interactive mode and is blocked in /swarm.",
     ),
-    (r"\b(supabase\s+db\s+reset|prisma\s+db\s+push\s+--force-reset|dropdb)\b", "Destructive DB reset blocked."),
 ]
 
 # Matches `.env` or `.env.<suffix>` secrets while allowing `.env.example`/`.sample`/`.template`.
@@ -130,9 +132,23 @@ SAFE_SINK_PATHS = {"/dev/null"}
 MAX_RECURSION_DEPTH = 4
 
 
-def is_interactive() -> bool:
-    """Return True only when interactive prompting is explicitly opted in."""
-    return os.environ.get("SWARM_GUARD_INTERACTIVE") == "1"
+def is_swarm_worker(cwd: str | None = None) -> bool:
+    """Return True when running inside a /swarm worker worktree or strict override."""
+    if os.environ.get("SWARM_GUARD_STRICT") == "1":
+        return True
+    target_cwd = cwd or os.getcwd()
+    normalized = os.path.realpath(target_cwd).replace(os.sep, "/")
+    return "/swarm-" in normalized
+
+
+def is_interactive(cwd: str | None = None) -> bool:
+    """Interactive by default in single-agent sessions; strict inside /swarm workers."""
+    override = os.environ.get("SWARM_GUARD_INTERACTIVE")
+    if override == "0":
+        return False
+    if override == "1":
+        return True
+    return not is_swarm_worker(cwd)
 
 
 def _is_case_insensitive_fs() -> bool:
@@ -181,7 +197,7 @@ def normalize_relpath(raw_path: str, cwd: str) -> str:
     return rel.replace(os.sep, "/")
 
 
-def _check_relpath_rules(rel_path: str) -> dict | None:
+def _check_relpath_rules(rel_path: str, *, interactive: bool) -> dict | None:
     flags = _path_regex_flags()
     for pattern in FORBIDDEN_PATH_PATTERNS:
         if re.search(pattern, rel_path, flags=flags):
@@ -194,7 +210,7 @@ def _check_relpath_rules(rel_path: str) -> dict | None:
             }
     for pattern in PROTECTED_PATH_PATTERNS:
         if re.search(pattern, rel_path, flags=flags):
-            if is_interactive():
+            if interactive:
                 return {
                     "decision": "force_ask",
                     "reason": f"High-impact shared/sensitive file ({rel_path}) requires confirmation.",
@@ -225,6 +241,7 @@ def _check_shell_target_path(
     workspace_real: str,
     *,
     allow_dev_null: bool = False,
+    interactive: bool = False,
 ) -> dict | None:
     if not raw_target:
         return None
@@ -252,7 +269,7 @@ def _check_shell_target_path(
             "reason": f"Mutating command targets path outside workspace ({raw_target}).",
         }
     rel_path = os.path.relpath(target_real, workspace_real).replace(os.sep, "/")
-    return _check_relpath_rules(rel_path)
+    return _check_relpath_rules(rel_path, interactive=interactive)
 
 
 def _is_in_place_flag(token: str) -> bool:
@@ -329,15 +346,22 @@ def _check_command_segment(
     workspace_real: str,
     dir_stack: list[str],
     depth: int,
+    *,
+    interactive: bool,
 ) -> tuple[dict | None, str]:
     segment = _strip_subshell_parens(segment)
     if not segment:
         return None, seg_cwd
 
     flags = _path_regex_flags()
-    for pattern, reason in DENIED_COMMAND_PATTERNS:
+    for pattern, reason in ALWAYS_DENIED_COMMAND_PATTERNS:
         if re.search(pattern, segment):
             return {"decision": "deny", "reason": reason}, seg_cwd
+
+    for pattern, reason in PROTECTED_COMMAND_PATTERNS:
+        if re.search(pattern, segment):
+            decision = "force_ask" if interactive else "deny"
+            return {"decision": decision, "reason": reason}, seg_cwd
 
     if re.search(ENV_SECRET_CMD_PATTERN, segment, flags=flags):
         return (
@@ -366,7 +390,11 @@ def _check_command_segment(
                 continue
             if next_tok:
                 deny = _check_shell_target_path(
-                    next_tok, seg_cwd, workspace_real, allow_dev_null=True
+                    next_tok,
+                    seg_cwd,
+                    workspace_real,
+                    allow_dev_null=True,
+                    interactive=interactive,
                 )
                 if deny:
                     return deny, seg_cwd
@@ -453,7 +481,13 @@ def _check_command_segment(
                         {"decision": "deny", "reason": f"Inline shell `{cmd_name} -c` missing command string."},
                         seg_cwd,
                     )
-                deny = _check_command(cmd_args[i + 1], seg_cwd, workspace_real, depth + 1)
+                deny = _check_command(
+                    cmd_args[i + 1],
+                    seg_cwd,
+                    workspace_real,
+                    depth + 1,
+                    interactive=interactive,
+                )
                 if deny:
                     return deny, seg_cwd
                 return None, seg_cwd
@@ -462,7 +496,13 @@ def _check_command_segment(
     if cmd_name == "eval":
         inline_cmd = " ".join(cmd_args).strip()
         if inline_cmd:
-            deny = _check_command(inline_cmd, seg_cwd, workspace_real, depth + 1)
+            deny = _check_command(
+                inline_cmd,
+                seg_cwd,
+                workspace_real,
+                depth + 1,
+                interactive=interactive,
+            )
             if deny:
                 return deny, seg_cwd
         return None, seg_cwd
@@ -500,7 +540,11 @@ def _check_command_segment(
         if cmd_name == "dd":
             if arg.startswith("of="):
                 deny = _check_shell_target_path(
-                    arg[3:], seg_cwd, workspace_real, allow_dev_null=True
+                    arg[3:],
+                    seg_cwd,
+                    workspace_real,
+                    allow_dev_null=True,
+                    interactive=interactive,
                 )
                 if deny:
                     return deny, seg_cwd
@@ -513,6 +557,7 @@ def _check_command_segment(
             seg_cwd,
             workspace_real,
             allow_dev_null=(cmd_name == "tee"),
+            interactive=interactive,
         )
         if deny:
             return deny, seg_cwd
@@ -521,14 +566,23 @@ def _check_command_segment(
         link_target = positional_args[0]
         link_dest = positional_args[-1]
         dest_dir = os.path.dirname(_resolve_real(link_dest, seg_cwd))
-        deny = _check_shell_target_path(link_target, dest_dir, workspace_real)
+        deny = _check_shell_target_path(
+            link_target, dest_dir, workspace_real, interactive=interactive
+        )
         if deny:
             return deny, seg_cwd
 
     return None, seg_cwd
 
 
-def _check_command(cmd: str, cwd: str, workspace_real: str, depth: int = 0) -> dict | None:
+def _check_command(
+    cmd: str,
+    cwd: str,
+    workspace_real: str,
+    depth: int = 0,
+    *,
+    interactive: bool = False,
+) -> dict | None:
     if depth > MAX_RECURSION_DEPTH:
         return {
             "decision": "deny",
@@ -538,7 +592,9 @@ def _check_command(cmd: str, cwd: str, workspace_real: str, depth: int = 0) -> d
     normalized_cmd = re.sub(r"\\\r?\n", "", cmd)
 
     for sub_cmd in _extract_command_substitutions(normalized_cmd):
-        deny = _check_command(sub_cmd, cwd, workspace_real, depth + 1)
+        deny = _check_command(
+            sub_cmd, cwd, workspace_real, depth + 1, interactive=interactive
+        )
         if deny:
             return deny
 
@@ -546,7 +602,12 @@ def _check_command(cmd: str, cwd: str, workspace_real: str, depth: int = 0) -> d
     dir_stack: list[str] = []
     for segment in SEGMENT_SPLIT_RE.split(normalized_cmd):
         deny, seg_cwd = _check_command_segment(
-            segment.strip(), seg_cwd, workspace_real, dir_stack, depth
+            segment.strip(),
+            seg_cwd,
+            workspace_real,
+            dir_stack,
+            depth,
+            interactive=interactive,
         )
         if deny:
             return deny
@@ -571,10 +632,11 @@ def check_tool_call(payload: dict) -> dict:
     args = tool_call.get("args") or {}
     cwd = payload.get("cwd") or os.getcwd()
     cwd_real = os.path.realpath(cwd)
+    interactive = is_interactive(cwd)
 
     if tool_name == "run_command":
         cmd = args.get("CommandLine") or args.get("command") or ""
-        deny = _check_command(cmd, cwd, cwd_real)
+        deny = _check_command(cmd, cwd, cwd_real, interactive=interactive)
         return deny if deny else {"decision": "allow"}
 
     target_path = (
@@ -625,7 +687,7 @@ def check_tool_call(payload: dict) -> dict:
             return {"decision": "allow"}
 
         rel_path = os.path.relpath(target_real, cwd_real).replace(os.sep, "/")
-        rule_decision = _check_relpath_rules(rel_path)
+        rule_decision = _check_relpath_rules(rel_path, interactive=interactive)
         if rule_decision:
             return rule_decision
 
