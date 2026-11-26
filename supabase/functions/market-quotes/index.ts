@@ -10,6 +10,7 @@ import {
   fetchTextWithRetry,
   parseFiniteNumber,
   safeJsonParse,
+  stripHtmlTags,
 } from "../_shared/http.ts";
 
 interface MarketQuoteTarget {
@@ -156,7 +157,7 @@ function parseYahooTwHtml(html: string): RealtimeStockInfo | null {
   let liMatch: RegExpExecArray | null;
   while ((liMatch = liRegex.exec(scope)) !== null) {
     const spans = [...liMatch[1].matchAll(/<span[^>]*>([\s\S]*?)<\/span>/gi)].map(
-      (m) => m[1].replace(/<[^>]+>/g, "").trim(),
+      (m) => stripHtmlTags(m[1]),
     );
     if (spans.length >= 2) {
       kv.set(spans[0], spans[spans.length - 1]);

@@ -5,7 +5,11 @@ import {
   jsonResponse,
   requireAuthHeader,
 } from "../_shared/cors.ts";
-import { fetchTextWithRetry, parseFiniteNumber } from "../_shared/http.ts";
+import {
+  fetchTextWithRetry,
+  parseFiniteNumber,
+  stripHtmlTags,
+} from "../_shared/http.ts";
 
 interface DividendResult {
   amount: number;
@@ -15,10 +19,6 @@ interface DividendResult {
 interface YahooDividendSummary {
   cashDividend: DividendResult | null;
   stockDividend: DividendResult | null;
-}
-
-function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, "").trim();
 }
 
 function normalizeDate(raw: string): string | null {
@@ -40,7 +40,7 @@ function parseYahooDividendHtml(html: string): YahooDividendSummary {
   let liMatch: RegExpExecArray | null;
   while ((liMatch = liRegex.exec(scope)) !== null) {
     const divs = [...liMatch[1].matchAll(/<div[^>]*>([\s\S]*?)<\/div>/gi)].map(
-      (m) => stripTags(m[1]),
+      (m) => stripHtmlTags(m[1]),
     );
     if (divs.length < 9) continue;
     const period = divs[3];
